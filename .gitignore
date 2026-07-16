@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Banco de dados / dados do app
+data/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+
+# Arquivos compactados temporarios
+*.zip
+
+# OS / editores
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
