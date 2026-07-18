@@ -1,5 +1,6 @@
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -21,7 +22,11 @@ from PySide6.QtWidgets import (
 )
 
 from motocontrol.config import MAINTENANCE_CATEGORIES
-from motocontrol.database.repositories import MaintenanceRepository, VehicleRepository
+from motocontrol.database.repositories import (
+    MaintenanceRepository,
+    SettingsRepository,
+    VehicleRepository,
+)
 from motocontrol.services.calculations import get_latest_odometer
 from motocontrol.ui.helpers import (
     create_search_field,
@@ -146,6 +151,81 @@ class MaintenanceFormDialog(QDialog):
         }
 
 
+class NextRevisionDialog(QDialog):
+    def __init__(self, default_vehicle_id: int | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Próxima Revisão")
+        self.setMinimumWidth(420)
+        layout = QFormLayout(self)
+
+        self.vehicle = QComboBox()
+        for v in VehicleRepository.list_all():
+            self.vehicle.addItem(f"{v['placa']} — {v['marca']} {v['modelo']}", v["id"])
+
+        self.por_km = QDoubleSpinBox()
+        self.por_km.setRange(0, 9999999)
+        self.por_km.setDecimals(0)
+        self.por_km.setSuffix(" km")
+        self.por_km.setSpecialValueText("Não definido")
+
+        self.chk_data = QCheckBox("Definir revisão por data")
+        self.por_data = QDateEdit()
+        self.por_data.setCalendarPopup(True)
+        self.por_data.setDisplayFormat("dd/MM/yyyy")
+        self.por_data.setDate(QDate.currentDate())
+        self.por_data.setEnabled(False)
+        self.chk_data.toggled.connect(self.por_data.setEnabled)
+
+        layout.addRow(QLabel("Próxima Revisão"))
+        layout.addRow("Veículo:", self.vehicle)
+        layout.addRow("Por KM:", self.por_km)
+        layout.addRow(self.chk_data)
+        layout.addRow("Por Data:", self.por_data)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+
+        if default_vehicle_id:
+            idx = self.vehicle.findData(default_vehicle_id)
+            if idx >= 0:
+                self.vehicle.setCurrentIndex(idx)
+        self.vehicle.currentIndexChanged.connect(self._load_for_vehicle)
+        self._load_for_vehicle()
+
+    def _load_for_vehicle(self) -> None:
+        vid = self.vehicle.currentData()
+        if vid is None:
+            return
+        km = SettingsRepository.get(f"next_revision_km_{vid}", "")
+        date = SettingsRepository.get(f"next_revision_date_{vid}", "")
+        self.por_km.setValue(float(km) if km else 0)
+        if date:
+            d = QDate.fromString(date, "yyyy-MM-dd")
+            if d.isValid():
+                self.por_data.setDate(d)
+            self.chk_data.setChecked(True)
+        else:
+            self.chk_data.setChecked(False)
+
+    def save(self) -> None:
+        vid = self.vehicle.currentData()
+        if vid is None:
+            return
+        km = self.por_km.value()
+        SettingsRepository.set(
+            f"next_revision_km_{vid}", str(int(km)) if km > 0 else ""
+        )
+        if self.chk_data.isChecked():
+            SettingsRepository.set(
+                f"next_revision_date_{vid}",
+                self.por_data.date().toString("yyyy-MM-dd"),
+            )
+        else:
+            SettingsRepository.set(f"next_revision_date_{vid}", "")
+
+
 class MaintenancePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -158,6 +238,10 @@ class MaintenancePage(QWidget):
         title.setObjectName("title")
         header.addWidget(title)
         header.addStretch()
+        btn_next_revision = QPushButton("Próxima Revisão")
+        btn_next_revision.setObjectName("secondaryBtn")
+        btn_next_revision.clicked.connect(self._set_next_revision)
+        header.addWidget(btn_next_revision)
         btn_new = QPushButton("+ Nova Manutenção")
         btn_new.clicked.connect(self._add)
         header.addWidget(btn_new)
@@ -167,6 +251,11 @@ class MaintenancePage(QWidget):
         self.filter_bar = VehicleFilterBar()
         filters.addWidget(self.filter_bar, 1)
         layout.addLayout(filters)
+
+        self.next_revision_label = QLabel("")
+        self.next_revision_label.setObjectName("subtitle")
+        self.next_revision_label.setWordWrap(True)
+        layout.addWidget(self.next_revision_label)
 
         self.search = create_search_field("Buscar manutenções...")
         self.search.textChanged.connect(lambda text: filter_table_rows(self.table, text))
@@ -198,6 +287,7 @@ class MaintenancePage(QWidget):
     def refresh(self) -> None:
         self.filter_bar.refresh()
         vid = self.filter_bar.selected_vehicle_id()
+        self.next_revision_label.setText(self._next_revision_text(vid))
         records = MaintenanceRepository.list_all(vid)
         self.table.setRowCount(len(records))
         for row, r in enumerate(records):
@@ -217,6 +307,29 @@ class MaintenancePage(QWidget):
             )
             set_table_item(self.table, row, 8, f"{r['marca']} {r['modelo']}")
         filter_table_rows(self.table, self.search.text())
+
+    def _next_revision_text(self, vid: int | None) -> str:
+        if not vid:
+            return "Próxima revisão: selecione um veículo para definir (Por KM / Por Data)."
+        km = SettingsRepository.get(f"next_revision_km_{vid}", "")
+        date = SettingsRepository.get(f"next_revision_date_{vid}", "")
+        parts = []
+        if km:
+            parts.append(f"Por KM: {format_number(float(km), decimals=0)} km")
+        if date:
+            parts.append(f"Por Data: {format_date(date)}")
+        if not parts:
+            return "Próxima revisão: não definida (clique em 'Próxima Revisão')."
+        return "Próxima revisão — " + "  |  ".join(parts)
+
+    def _set_next_revision(self) -> None:
+        if not VehicleRepository.list_all():
+            QMessageBox.warning(self, "Aviso", "Cadastre um veículo primeiro.")
+            return
+        dlg = NextRevisionDialog(self.filter_bar.selected_vehicle_id(), self)
+        if dlg.exec() == QDialog.Accepted:
+            dlg.save()
+            notify_data_changed(self)
 
     def _selected_id(self) -> int | None:
         row = self.table.currentRow()

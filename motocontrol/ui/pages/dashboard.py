@@ -43,7 +43,7 @@ class DashboardPage(QWidget):
         "gasto_anual": "Soma de todos os custos registrados no ano corrente.",
         "total_investido": "Valor de compra dos veículos mais todos os custos registrados.",
         "custo_km": "Custo total acumulado dividido pela quilometragem atual.",
-        "proxima_revisao": "Quilometragem do hodômetro na próxima revisão programada.",
+        "ultima_revisao": "Quilometragem registrada na última revisão.",
         "proximo_documento": "Documento com vencimento mais próximo.",
     }
 
@@ -91,7 +91,7 @@ class DashboardPage(QWidget):
             "gasto_anual": "Gasto Anual (R$)",
             "total_investido": "Total Investido (R$)",
             "custo_km": "Custo por KM (R$)",
-            "proxima_revisao": "Próxima Revisão",
+            "ultima_revisao": "Última Revisão",
             "proximo_documento": "Próximo Documento",
         }
         self.stat_cards = {
@@ -167,12 +167,12 @@ class DashboardPage(QWidget):
         self.stat_cards["custo_km"].set_value(format_custo_km(custo))
 
         rev = data["proxima_revisao"]
-        if rev:
-            self.stat_cards["proxima_revisao"].set_value(
-                format_km(rev["proxima_revisao_km"])
+        if rev and rev.get("ultima_revisao_km"):
+            self.stat_cards["ultima_revisao"].set_value(
+                format_km(rev["ultima_revisao_km"])
             )
         else:
-            self.stat_cards["proxima_revisao"].set_value("Sem revisão")
+            self.stat_cards["ultima_revisao"].set_value("Sem revisão")
 
         doc = data["proximo_documento"]
         if doc:
