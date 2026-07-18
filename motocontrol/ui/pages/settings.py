@@ -16,11 +16,12 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QComboBox,
 )
+from PySide6.QtCore import Qt
 
 from motocontrol.config import BACKUP_DIR
 from motocontrol.database.repositories import SettingsRepository
 from motocontrol.services.backup import create_backup, list_backups, restore_backup
-from motocontrol.ui.helpers import notify_data_changed
+from motocontrol.ui.helpers import notify_data_changed, set_table_item
 
 
 class SettingsPage(QWidget):
@@ -73,7 +74,10 @@ class SettingsPage(QWidget):
         layout.addWidget(QLabel("Backups disponíveis:"))
         self.backup_table = QTableWidget(0, 3)
         self.backup_table.setHorizontalHeaderLabels(["Arquivo", "Tamanho (KB)", "Criado"])
-        self.backup_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        bheader = self.backup_table.horizontalHeader()
+        bheader.setSectionResizeMode(QHeaderView.ResizeToContents)
+        bheader.setStretchLastSection(True)
+        bheader.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.backup_table)
 
         info = QLabel(f"Pasta de backups: {BACKUP_DIR}")
@@ -96,9 +100,9 @@ class SettingsPage(QWidget):
         backups = list_backups()
         self.backup_table.setRowCount(len(backups))
         for row, b in enumerate(backups):
-            self.backup_table.setItem(row, 0, QTableWidgetItem(b["name"]))
-            self.backup_table.setItem(row, 1, QTableWidgetItem(str(b["size_kb"])))
-            self.backup_table.setItem(row, 2, QTableWidgetItem(b["created"]))
+            set_table_item(self.backup_table, row, 0, b["name"])
+            set_table_item(self.backup_table, row, 1, str(b["size_kb"]))
+            set_table_item(self.backup_table, row, 2, b["created"])
 
     def _save_theme(self) -> None:
         theme = self.theme_combo.currentData()

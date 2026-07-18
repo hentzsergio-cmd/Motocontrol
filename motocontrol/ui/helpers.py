@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLineEdit, QTableWidget, QTableWidgetItem, QWidget
+from PySide6.QtWidgets import QHeaderView, QLineEdit, QTableWidget, QTableWidgetItem, QWidget
 
 
 class SortableTableWidgetItem(QTableWidgetItem):
@@ -91,6 +91,10 @@ def setup_data_table(table: QTableWidget, *, hide_id: bool = True) -> None:
         table.setColumnHidden(0, True)
     table.setSortingEnabled(True)
     table.setAlternatingRowColors(True)
+    header = table.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.ResizeToContents)
+    header.setStretchLastSection(True)
+    header.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
 
 
 def set_table_item(
@@ -104,6 +108,7 @@ def set_table_item(
     item = SortableTableWidgetItem(text) if sort_value is not None else QTableWidgetItem(text)
     if sort_value is not None:
         item.setData(Qt.ItemDataRole.UserRole, sort_value)
+    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
     table.setItem(row, col, item)
 
 
